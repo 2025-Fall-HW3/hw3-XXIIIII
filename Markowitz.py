@@ -62,7 +62,16 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
-
+        # Equal weight: 1/number_of_assets for each asset, 0 for excluded asset
+        num_assets = len(assets)
+        weight_per_asset = 1.0 / num_assets
+        
+        for date in df.index:
+            # Set equal weights for all non-excluded assets
+            for asset in assets:
+                self.portfolio_weights.loc[date, asset] = weight_per_asset
+            # Set weight to 0 for excluded asset
+            self.portfolio_weights.loc[date, self.exclude] = 0
         """
         TODO: Complete Task 1 Above
         """
@@ -113,8 +122,13 @@ class RiskParityPortfolio:
         """
         TODO: Complete Task 2 Below
         """
-
-
+        for i in range(self.lookback + 1, len(df)):
+            R_n = df_returns[assets].iloc[i - self.lookback : i]
+            volatility = R_n.std()
+            inv_vol = 1 / volatility
+            weights = inv_vol / inv_vol.sum()
+            self.portfolio_weights.loc[df.index[i], assets] = weights.values
+            self.portfolio_weights.loc[df.index[i], self.exclude] = 0
 
         """
         TODO: Complete Task 2 Above
@@ -187,11 +201,17 @@ class MeanVariancePortfolio:
                 """
                 TODO: Complete Task 3 Below
                 """
-
-                # Sample Code: Initialize Decision w and the Objective
-                # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                # Initialize Decision variables
+                w = model.addMVar(n, name="w", lb=0, ub=1)  # long-only constraint
+                
+                # Objective: maximize w^T * mu - (gamma/2) * w^T * Sigma * w
+                portfolio_return = w @ mu
+                portfolio_variance = w @ Sigma @ w
+                
+                model.setObjective(portfolio_return - (gamma/2) * portfolio_variance, gp.GRB.MAXIMIZE)
+                
+                # Constraint: sum of weights = 1 (no leverage)
+                model.addConstr(w.sum() == 1, "budget")
 
                 """
                 TODO: Complete Task 3 Above

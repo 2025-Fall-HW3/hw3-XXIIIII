@@ -51,12 +51,13 @@ class MyPortfolio:
     NOTE: You can modify the initialization function
     """
 
-    def __init__(self, price, exclude, lookback=50, gamma=0):
+    def __init__(self, price, exclude, lookback=30, gamma=0.5, weight_limit=0.5):
         self.price = price
         self.returns = price.pct_change().fillna(0)
         self.exclude = exclude
         self.lookback = lookback
         self.gamma = gamma
+        self.weight_limit = weight_limit
 
     def calculate_weights(self):
         # Get the assets by excluding the specified column
@@ -70,8 +71,29 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        
-        
+        for t in range(self.lookback, len(self.price)):
+            window_returns = self.returns.iloc[t-self.lookback:t][assets]
+            mu = window_returns.mean().values
+            cov = window_returns.cov().values
+            
+            n = len(assets)
+            m = gp.Model()
+            m.setParam('OutputFlag', 0)
+            w = m.addVars(n, lb=0, ub=self.weight_limit, name='w')
+            
+            
+            
+            m.addConstr(gp.quicksum(w[i] for i in range(n)) == 1)
+            
+            obj = gp.quicksum(w[i] * w[j] * cov[i,j] for i in range(n) for j in range(n))
+            obj -= self.gamma * gp.quicksum(mu[i] * w[i] for i in range(n))
+            
+            m.setObjective(obj, gp.GRB.MINIMIZE)
+            m.optimize()
+            
+            if m.status == gp.GRB.OPTIMAL:
+                for i, asset in enumerate(assets):
+                    self.portfolio_weights.loc[self.price.index[t], asset] = w[i].X
         """
         TODO: Complete Task 4 Above
         """
