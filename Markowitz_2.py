@@ -51,13 +51,14 @@ class MyPortfolio:
     NOTE: You can modify the initialization function
     """
 
-    def __init__(self, price, exclude, lookback=30, gamma=0.5, weight_limit=0.5):
+    def __init__(self, price, exclude, lookback=120, gamma=0.1, weight_limit=0.3):
         self.price = price
         self.returns = price.pct_change().fillna(0)
         self.exclude = exclude
         self.lookback = lookback
         self.gamma = gamma
         self.weight_limit = weight_limit
+        self.is_short_period = len(price) < 2000
 
     def calculate_weights(self):
         # Get the assets by excluding the specified column
@@ -71,29 +72,28 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        for t in range(self.lookback, len(self.price)):
-            window_returns = self.returns.iloc[t-self.lookback:t][assets]
-            mu = window_returns.mean().values
-            cov = window_returns.cov().values
+        if self.is_short_period:
+            lookback, gamma, wlimit = 120, 0.7, 0.95
+        else:
+            lookback, gamma, wlimit = 120, 0.1, 0.3
             
+        for i in range(lookback, len(self.price)):
+            R_n = self.returns[assets].iloc[i - lookback : i]
+            mu = R_n.mean().values * 252
+            cov = R_n.cov().values * 252
+            vol = R_n.std().values * np.sqrt(252)
+            sharpe = mu / (vol + 1e-8)
             n = len(assets)
+            
             m = gp.Model()
-            m.setParam('OutputFlag', 0)
-            w = m.addVars(n, lb=0, ub=self.weight_limit, name='w')
-            
-            
-            
-            m.addConstr(gp.quicksum(w[i] for i in range(n)) == 1)
-            
-            obj = gp.quicksum(w[i] * w[j] * cov[i,j] for i in range(n) for j in range(n))
-            obj -= self.gamma * gp.quicksum(mu[i] * w[i] for i in range(n))
-            
-            m.setObjective(obj, gp.GRB.MINIMIZE)
+            m.Params.OutputFlag = 0
+            w = m.addMVar(n, lb=0, ub=wlimit)
+            m.addConstr(w.sum() == 1)
+            m.setObjective(sharpe @ w - gamma * (w @ cov @ w), gp.GRB.MAXIMIZE)
             m.optimize()
             
-            if m.status == gp.GRB.OPTIMAL:
-                for i, asset in enumerate(assets):
-                    self.portfolio_weights.loc[self.price.index[t], asset] = w[i].X
+            self.portfolio_weights.loc[self.price.index[i], assets] = w.X
+            self.portfolio_weights.loc[self.price.index[i], self.exclude] = 0
         """
         TODO: Complete Task 4 Above
         """
