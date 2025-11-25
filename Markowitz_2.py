@@ -122,7 +122,6 @@ class MyPortfolio:
 
         return self.portfolio_weights, self.portfolio_returns
 
-
 if __name__ == "__main__":
     # Import grading system (protected file in GitHub Classroom)
     from grader_2 import AssignmentJudge
